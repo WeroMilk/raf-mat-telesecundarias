@@ -1,0 +1,173 @@
+#!/usr/bin/env node
+/**
+ * Fusiona datos del Excel "Buscador de Escuelas en Línea" con public/data/resultados.json.
+ * Añade a cada escuela los campos: nombre, turno, domicilio, teléfono, colonia, localidad, municipio, etc.
+ *
+ * Uso:
+ *   node scripts/merge-buscador-escuelas.mjs
+ *   node scripts/merge-buscador-escuelas.mjs "C:\Users\...\Buscador de Escuelas en Linea.xlsx"
+ */
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import XLSX from "xlsx";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.resolve(__dirname, "..");
+const RESULTADOS_PATH = path.join(ROOT, "public", "data", "resultados.json");
+const NOMBRES_OFICIALES_PATH = path.join(ROOT, "data", "nombres-escuelas-oficiales.json");
+
+const EXCEL_EN_REPO = path.join(ROOT, "data", "buscador", "Buscador de Escuelas en Linea.xlsx");
+const DEFAULT_EXCEL =
+  process.env.BUSCADOR_EXCEL ||
+  (fs.existsSync(EXCEL_EN_REPO) ? EXCEL_EN_REPO : path.join(process.env.USERPROFILE || process.env.HOME || "", "Downloads", "Buscador de Escuelas en Linea.xlsx"));
+
+const COLUMNAS = [
+  "CCT",
+  "NOMBRE",
+  "TURNO",
+  "NIVEL EDUCATIVO",
+  "ZONA",
+  "DOMICILIO",
+  "TELÉFONO",
+  "COLONIA",
+  "LOCALIDAD",
+  "MUNICIPIO",
+  "ALUMNOS",
+];
+
+/** Corrige texto UTF-8 leído como Latin-1 (ej. PEÃA → PEÑA, MUÃOZ → MUÑOZ). */
+function fixUtf8Mojibake(str) {
+  if (typeof str !== "string") return str;
+  let s = str
+    .replace(/Ã±/g, "ñ")
+    .replace(/ÃA/g, "Ñ")
+    .replace(/Ão/g, "ñ")
+    .replace(/ÃO/g, "Ñ")
+    .replace(/Ãa/g, "ñ");
+  if (/Ã[\x80-\xBF]/.test(s)) {
+    try {
+      s = Buffer.from(s, "latin1").toString("utf8");
+    } catch {
+      // mantener s
+    }
+  }
+  return fixOrtografiaComun(s);
+}
+
+/** Corrige errores ortográficos comunes (RAE / mojibake del buscador SEP). */
+function fixOrtografiaComun(str) {
+  if (typeof str !== "string") return str;
+  return str
+    .replace(/MUÃOZ/gi, "MUÑOZ")
+    .replace(/\bMUÑZ\b/gi, "MUÑOZ")
+    .replace(/BRISEÃO/gi, "BRISEÑO")
+    .replace(/\bBRISEÑ\b/gi, "BRISEÑO")
+    .replace(/PEÃA/gi, "PEÑA")
+    .replace(/\bPEÑ\b/gi, "PEÑA")
+    .replace(/VIDAÃA/gi, "VIDAÑA")
+    .replace(/SEPùLVEDA/gi, "SEPULVEDA")
+    .replace(/SAñUDO/gi, "SANUDO");
+}
+
+function loadNombresOficiales() {
+  if (!fs.existsSync(NOMBRES_OFICIALES_PATH)) return {};
+  return JSON.parse(fs.readFileSync(NOMBRES_OFICIALES_PATH, "utf8"));
+}
+
+function nombreOficial(cct, fallback) {
+  const map = loadNombresOficiales();
+  return map[cct] ?? fixOrtografiaComun(fallback ?? cct);
+}
+
+function buildMapFromExcel(filePath) {
+  const wb = XLSX.readFile(filePath, { type: "file" });
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+  if (rows.length < 2) return new Map();
+  const headerRow = rows[1].map((h) => (h != null ? fixUtf8Mojibake(String(h).trim()).toUpperCase() : ""));
+  const idx = {};
+  COLUMNAS.forEach((col) => {
+    const i = headerRow.indexOf(col.toUpperCase());
+    if (i >= 0) idx[col] = i;
+  });
+  const map = new Map();
+  for (let i = 2; i < rows.length; i++) {
+    const row = rows[i];
+    const cct = row[idx["CCT"]] != null ? String(row[idx["CCT"]]).trim() : "";
+    if (!cct) continue;
+    const get = (col) => {
+      const j = idx[col];
+      if (j == null) return undefined;
+      const v = row[j];
+      const s = v != null && v !== "" ? String(v).trim() : undefined;
+      return s != null ? fixUtf8Mojibake(s) : undefined;
+    };
+    map.set(cct, {
+      nombre: nombreOficial(cct, get("NOMBRE")),
+      turno: get("TURNO"),
+      nivelEducativo: get("NIVEL EDUCATIVO"),
+      zona: get("ZONA"),
+      domicilio: get("DOMICILIO"),
+      telefono: get("TELÉFONO"),
+      colonia: get("COLONIA"),
+      localidad: get("LOCALIDAD"),
+      municipio: get("MUNICIPIO"),
+    });
+  }
+  return map;
+}
+
+function main() {
+  const excelPath = process.argv[2] || DEFAULT_EXCEL;
+  if (!fs.existsSync(excelPath)) {
+    console.warn("No se encontró el Excel del Buscador:", excelPath);
+    console.warn("Omitiendo merge. Los datos de nombre/localidad/municipio no se añadirán.");
+    process.exit(0);
+  }
+
+  if (!fs.existsSync(RESULTADOS_PATH)) {
+    console.error("No existe public/data/resultados.json. Ejecuta antes npm run build:data");
+    process.exit(1);
+  }
+
+  const buscadorMap = buildMapFromExcel(excelPath);
+  console.log("CCTs en Buscador:", buscadorMap.size);
+
+  const resultados = JSON.parse(fs.readFileSync(RESULTADOS_PATH, "utf8"));
+  let merged = 0;
+
+  const aplicarBuscador = (escuelas) => {
+    for (const esc of escuelas || []) {
+      const info = buscadorMap.get(esc.cct);
+      if (info) {
+        esc.buscador = {
+          ...info,
+          nombre: nombreOficial(esc.cct, info.nombre),
+        };
+        merged++;
+      } else if (loadNombresOficiales()[esc.cct]) {
+        esc.buscador = { ...(esc.buscador || {}), nombre: nombreOficial(esc.cct) };
+        merged++;
+      }
+    }
+  };
+
+  if (Array.isArray(resultados.evaluaciones)) {
+    for (const ev of resultados.evaluaciones) {
+      aplicarBuscador(ev.escuelas);
+    }
+  } else {
+    aplicarBuscador(resultados.escuelas);
+  }
+
+  fs.writeFileSync(RESULTADOS_PATH, JSON.stringify(resultados, null, 2), "utf8");
+  const totalEscuelas = Array.isArray(resultados.evaluaciones)
+    ? resultados.evaluaciones.reduce((s, e) => s + (e.escuelas?.length ?? 0), 0)
+    : (resultados.escuelas || []).length;
+  console.log("Escuelas en resultados:", totalEscuelas);
+  console.log("Escuelas actualizadas con datos del Buscador:", merged);
+  console.log("Guardado:", RESULTADOS_PATH);
+}
+
+main();
