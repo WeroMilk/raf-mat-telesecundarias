@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
@@ -19,7 +19,6 @@ import SelectorEvaluacion from "@/app/components/SelectorEvaluacion";
 import KpiNivelCard from "@/app/components/KpiNivelCard";
 import EmptyState from "@/app/components/EmptyState";
 import ComparativaLegend from "@/app/components/ComparativaLegend";
-import BannerCobertura2026 from "@/app/components/BannerCobertura2026";
 import KPIComparativa, { KPIComparativaResumen, nivelComparativaHref } from "@/app/components/KPIComparativa";
 import DashboardResultadosMat from "@/app/components/DashboardResultadosMat";
 import { COLORS } from "@/types/raf";
@@ -101,16 +100,6 @@ export default function DashboardHomeClient({ data, cobertura, isSuper, zonaForc
       </PageHeader>
 
       <ScrollOnlyWhenNeeded className="flex min-h-0 flex-1 flex-col overflow-x-hidden pb-3">
-        {evalMode === "aterrizaje-2026" && (
-          <div className="mb-2 shrink-0">
-            <BannerCobertura2026
-              escuelasConDatos={cobertura.escuelasConDatos}
-              escuelasTotales={cobertura.escuelasTotales}
-              totalAlumnos2026={cobertura.totalAlumnos2026}
-            />
-          </div>
-        )}
-
         {escuelas.length === 0 && evalMode !== "comparar" && evalMode !== "resultados" ? (
           <EmptyState
             title={
