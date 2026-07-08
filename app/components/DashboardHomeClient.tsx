@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
@@ -21,6 +21,7 @@ import EmptyState from "@/app/components/EmptyState";
 import ComparativaLegend from "@/app/components/ComparativaLegend";
 import BannerCobertura2026 from "@/app/components/BannerCobertura2026";
 import KPIComparativa, { KPIComparativaResumen, nivelComparativaHref } from "@/app/components/KPIComparativa";
+import DashboardResultadosMat from "@/app/components/DashboardResultadosMat";
 import { COLORS } from "@/types/raf";
 import { RAF_CONFIG } from "@/lib/raf-config";
 
@@ -66,7 +67,9 @@ export default function DashboardHomeClient({ data, cobertura, isSuper, zonaForc
   const evalNombre = evalMode === "aterrizaje-2026" ? EVALUACIONES_META[EVALUACION_ATERRIZAJE_2026].nombre : EVALUACIONES_META[EVALUACION_DESPEGUE_2025].nombre;
 
   const navHref = (path: string) => appendNavParams(path, { evalMode, zona: zonaSeleccionada });
+  const compararNavHref = (path: string) => appendNavParams(path, { evalMode: "comparar", zona: zonaSeleccionada });
   const inicioHref = navHref("/");
+  const resultadosInicioHref = appendNavParams("/", { evalMode: "resultados", zona: zonaSeleccionada });
 
   const totalAlumnos = escuelas.reduce((s, e) => s + e.totalEstudiantes, 0);
   const totalReq = escuelas.reduce((s, e) => s + e.requiereApoyo, 0);
@@ -94,7 +97,6 @@ export default function DashboardHomeClient({ data, cobertura, isSuper, zonaForc
         <div className="page-header-text page-header-text--compact">
           <h1 className="page-title text-base lg:text-xl">RAF Matemáticas</h1>
           <p className="page-subtitle text-xs lg:text-sm">{RAF_CONFIG.nombrePlural}</p>
-          <p className="page-subtitle text-xs lg:text-sm">Mtra. Martha Camargo</p>
         </div>
       </PageHeader>
 
@@ -109,7 +111,7 @@ export default function DashboardHomeClient({ data, cobertura, isSuper, zonaForc
           </div>
         )}
 
-        {escuelas.length === 0 && evalMode !== "comparar" ? (
+        {escuelas.length === 0 && evalMode !== "comparar" && evalMode !== "resultados" ? (
           <EmptyState
             title={
               evalMode === "aterrizaje-2026"
@@ -126,7 +128,16 @@ export default function DashboardHomeClient({ data, cobertura, isSuper, zonaForc
           />
         ) : (
           <>
-            {evalMode === "comparar" ? (
+            {evalMode === "resultados" ? (
+              <section className="shrink-0">
+                <DashboardResultadosMat
+                  comparativa={comparativa}
+                  getNivelHref={(key) =>
+                    withReturnTo(nivelComparativaHref(compararNavHref, key), resultadosInicioHref)
+                  }
+                />
+              </section>
+            ) : evalMode === "comparar" ? (
               <>
                 <section className="shrink-0 space-y-2">
                   <KPIComparativaResumen comparativa={comparativa} />
@@ -195,7 +206,7 @@ export default function DashboardHomeClient({ data, cobertura, isSuper, zonaForc
             </section>
 
             <section className="grid shrink-0 grid-cols-1 gap-3 pt-2 md:min-h-0 md:flex-1 md:grid-cols-2 md:gap-4 md:pt-3">
-              {evalMode === "comparar" ? (
+              {evalMode === "resultados" ? null : evalMode === "comparar" ? (
                 <>
                   <section className="chart-card flex shrink-0 flex-col p-3 md:min-h-0 md:shrink md:flex-1">
                     <ChartComparativaNiveles
