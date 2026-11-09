@@ -46,7 +46,7 @@ export default function LogoSonoraSec({
   const [imgError, setImgError] = useState(false);
   const maxH = prominent ? "148px" : compact ? "56px" : "118px";
   const wrapperClass = prominent
-    ? "mx-auto flex w-full items-center justify-center relative"
+    ? "relative mx-auto flex w-full min-w-0 max-w-full items-center justify-center"
     : compact
       ? "mx-auto flex items-center justify-center relative min-h-[56px] rounded-lg p-1"
       : "mx-auto flex items-center justify-center relative min-h-[118px] rounded-xl p-2";
@@ -61,11 +61,11 @@ export default function LogoSonoraSec({
         src="/Logtipo_EscudoColor.png"
         alt="Sonora Tierra de Oportunidades · Secretaría de Educación y Cultura"
         width={Math.min(maxWidth, 480)}
-        height={100}
+        height={Math.round(Math.min(maxWidth, 480) * (295 / 603))}
         style={{
           maxWidth: "100%",
           maxHeight: maxH,
-          width: "auto",
+          width: prominent ? "100%" : "auto",
           height: "auto",
           aspectRatio: "603 / 295",
           marginLeft: "auto",
@@ -74,8 +74,8 @@ export default function LogoSonoraSec({
         }}
         className={
           imgLoaded && !imgError
-            ? "mx-auto block h-auto w-auto max-w-full object-contain opacity-100 transition-opacity duration-200"
-            : "absolute inset-0 m-auto block h-auto w-auto max-w-full object-contain opacity-0 transition-opacity duration-200"
+            ? "mx-auto block h-auto min-w-0 max-w-full object-contain opacity-100 transition-opacity duration-200"
+            : "absolute inset-0 m-auto block h-auto min-w-0 max-w-full object-contain opacity-0 transition-opacity duration-200"
         }
         priority={priority}
         onLoad={() => setImgLoaded(true)}
